@@ -60,6 +60,24 @@ config VIDEOMODE_HELPERS
 config HDMI
 	bool
 
+config ZUMAPRO_BOOTFB
+	bool "Google Tensor G4 (zumapro) boot framebuffer"
+	depends on ARM64 && OF
+	help
+	  Hand the framebuffer the Pixel bootloader is already scanning out
+	  on DECON0 to simpledrm, on Tensor G4 (zumapro) phones such as the
+	  Pixel 9a. Geometry, stride and pixel format are read back out of
+	  the DECON registers rather than described in the device tree, the
+	  buffer is reserved NOMAP before memblock init, and the panel --
+	  which is command-mode -- keeps being triggered so it shows what is
+	  drawn. This gives a console on the panel on a SoC whose display
+	  pipeline has no mainline driver.
+
+	  Does nothing unless "zumapro_bootfb" is passed on the kernel
+	  command line. Needs DRM_SIMPLEDRM to put anything on screen.
+
+	  If unsure, say N.
+
 endif # HAS_IOMEM
 
 config FIRMWARE_EDID
