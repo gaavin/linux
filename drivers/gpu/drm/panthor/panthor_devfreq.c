@@ -140,6 +140,11 @@ static struct devfreq_dev_profile panthor_devfreq_profile = {
 	.get_cur_freq = panthor_devfreq_get_cur_freq,
 };
 
+static void panthor_devfreq_cooling_unregister(void *cooling)
+{
+	devfreq_cooling_unregister(cooling);
+}
+
 int panthor_devfreq_init(struct panthor_device *ptdev)
 {
 	/* There's actually 2 regulators (mali and sram), but the OPP core only
@@ -290,8 +295,28 @@ int panthor_devfreq_init(struct panthor_device *ptdev)
 	}
 
 	cooling = devfreq_cooling_em_register(pdevfreq->devfreq, NULL);
-	if (IS_ERR(cooling))
+	if (IS_ERR(cooling)) {
 		DRM_DEV_INFO(dev, "Failed to register cooling device\n");
+		return 0;
+	}
+
+	/*
+	 * Nothing owned this cooling device, so a probe that failed after this
+	 * point -- a missing mali_csffw.bin is enough -- unwound the devfreq
+	 * underneath it and left the thermal zone holding a cooling device
+	 * whose ->devfreq was freed memory. The next poll of that zone then
+	 * took power_allocator through devfreq_cooling_get_requested_power()
+	 * into a mutex_lock() on a dangling pointer.
+	 *
+	 * Registered after devm_devfreq_add_device() on purpose: devres
+	 * unwinds last-in-first-out, so this runs while ->devfreq is still
+	 * live, which devfreq_cooling_unregister() requires -- it reads
+	 * dfc->devfreq->dev.parent.
+	 */
+	ret = devm_add_action_or_reset(dev, panthor_devfreq_cooling_unregister,
+				       cooling);
+	if (ret)
+		return ret;
 
 	return 0;
 }
