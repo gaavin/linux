@@ -94,7 +94,7 @@ CONFIG_CPU_FREQ=y
 CONFIG_CPU_FREQ_STAT=y
 CONFIG_CPU_FREQ_GOV_POWERSAVE=y
 CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
-CONFIG_CPUFREQ_DT=m
+CONFIG_CPUFREQ_DT=y
 CONFIG_CPUFREQ_DT_PLATDEV=y
 CONFIG_VIRTUALIZATION=y
 CONFIG_KVM=y
@@ -599,3 +599,42 @@ CONFIG_GOOGLE_AOC_USF=m
 CONFIG_INPUT_AOC_GESTURE_WAKE=m
 CONFIG_TOUCHSCREEN_TBN=m
 CONFIG_AOC_USF_IIO=m
+
+#
+# Pixel 9a (tegu) NixOS port.
+#
+# Options this board needs that the config above does not already carry. They
+# were previously asserted from outside the tree, by the Nix expression that
+# builds this kernel; they belong here, with the hardware they describe.
+#
+# Deliberately NOT here: anything nixpkgs' own common-config.nix also sets.
+# That fragment is layered over this defconfig, so a value set here would be
+# silently overridden -- STRICT_DEVMEM and LOGO are the ones that bite. Those
+# stay forced on the Nix side.
+#
+
+# The boot framebuffer the Pixel bootloader leaves scanning out on DECON0.
+# Does nothing without "zumapro_bootfb" on the command line.
+CONFIG_ZUMAPRO_BOOTFB=y
+
+# Debug UART early enough to see a failure before the console is up.
+CONFIG_SERIAL_EARLYCON=y
+
+# Bring-up instrument: most of this SoC still has no driver, so /dev/mem is
+# how a block gets inspected from userspace. (regmap's own debugfs needs
+# nothing here -- regmap-debugfs.o is gated on CONFIG_DEBUG_FS, which is
+# already set above.)
+CONFIG_DEVMEM=y
+
+# BL2 arms a 60 s cluster watchdog on every boot. Nothing petting it is a
+# reset on a timer, so Linux has to adopt the running watchdog rather than
+# start a fresh one.
+CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED=y
+
+# cpufreq-dt (set =y above) is instantiated by cpufreq-dt-platdev, which
+# publishes no module alias -- as a module nothing ever loads it and the CPUs
+# stay at whatever the bootloader left them at.
+
+# The USI block the touchscreen's SPI controller sits behind.
+CONFIG_EXYNOS_USI=y
+CONFIG_INPUT=y
