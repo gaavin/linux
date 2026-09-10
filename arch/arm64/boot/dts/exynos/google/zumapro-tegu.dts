@@ -20,25 +20,39 @@
 	aoc-board-rev = <0x10000>;
 };
 
+/*
+ * The bootloader's framebuffer is handed over by CONFIG_ZUMAPRO_BOOTFB
+ * (drivers/video/zumapro-bootfb.c) rather than by the nodes below.
+ *
+ * That driver reads geometry, stride and pixel format back out of DECON
+ * instead of hard-coding them, reserves the buffer NOMAP before memblock
+ * init, and keeps triggering the panel -- which is command-mode, so it only
+ * shows a frame when told to. Two owners of TRIG_CON, or two simpledrm
+ * devices for one buffer, is worse than either alone, so these stay off.
+ *
+ * cont_splash_mem goes with them. It reserves the same buffer, but bootfb's
+ * early_param runs before the device tree's reserved-memory scan and has
+ * already marked the range NOMAP by then, so all the node can do is fail:
+ *   OF: reserved mem: failed to reserve memory for node 'splash@fac00000'
+ *
+ * The geometry is left here as the record of what this panel is: 1080x2424
+ * at 4 bytes per pixel, scanning from 0xfac00000.
+ */
 &decon_autorefresh_bit {
-	status = "okay";
+	status = "disabled";
 };
 
 &cont_splash_mem {
-	// reg = <0x0 0xfac00000 (1440 * 3120 * 4)>;
 	reg = <0x0 0xfac00000 (1080 * 2424 * 4)>;
 
-	status = "okay";
+	status = "disabled";
 };
 
 &framebuffer0 {
-	// width = <1440>;
-	// height = <3120>;
-	// stride = <(1440 * 4)>;
 	width = <1080>;
 	height = <2424>;
 	stride = <(1080 * 4)>;
 	format = "a8r8g8b8";
 
-	status = "okay";
+	status = "disabled";
 };
