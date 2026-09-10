@@ -12,6 +12,22 @@
 / {
 	model = "Pixel 9a";
 	compatible = "google,tegu", "google,zumapro-tegu", "google,zumapro";
+
+	chosen {
+		/*
+		 * ABL concatenates the boot image's command line onto whatever
+		 * is here, and the boot image this board is built into already
+		 * passes init=, both consoles, the fbcon font and the panic
+		 * policy. Inheriting zumapro-pixel-common.dtsi's arguments as
+		 * well would put a second, different set of console= and
+		 * *_ignore_unused in front of those, and the last console= is
+		 * the one that becomes /dev/console.
+		 *
+		 * The property still has to exist: the bootloader crashes when
+		 * it is absent.
+		 */
+		bootargs = "";
+	};
 };
 
 /* Board identity the AOC firmware reads at boot. */
