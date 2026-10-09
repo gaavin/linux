@@ -782,6 +782,12 @@ static u32 brcmf_chip_tcm_rambase(struct brcmf_chip_priv *ci)
 		return 0x740000;
 	case BRCM_CC_4390_CHIP_ID:
 		return 0x2a0000;
+	case BRCM_CC_4383_CHIP_ID:
+		/* CR4_4383_RAM_BASE in the vendor's bcmdhd (include/sbchipc.h):
+		 * "Based on the 4383 BackPlane Architecture, RAM address base
+		 * updated as 0x6E_0000".
+		 */
+		return 0x6e0000;
 	default:
 		brcmf_err("unknown chip: %s\n", ci->pub.name);
 		break;

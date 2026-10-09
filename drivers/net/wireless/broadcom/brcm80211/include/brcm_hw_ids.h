@@ -56,6 +56,10 @@
 #define BRCM_CC_43752_CHIP_ID		43752
 #define BRCM_CC_4377_CHIP_ID		0x4377
 #define BRCM_CC_4378_CHIP_ID		0x4378
+/* Pixel 9a (tegu). The vendor's bcmdhd knows this part as BCM4383_CHIP_ID;
+ * it reports rev 2 and has PCIe endpoint 0x4449 (bcmdhd's BCM4383_D11AX_ID).
+ */
+#define BRCM_CC_4383_CHIP_ID		0x4383
 #define BRCM_CC_4387_CHIP_ID		0x4387
 #define BRCM_CC_4388_CHIP_ID		0x4388
 #define BRCM_CC_4390_CHIP_ID		0x4390
@@ -103,6 +107,7 @@
 #define BRCM_PCIE_4387_DEVICE_ID	0x4433
 #define BRCM_PCIE_4388_DEVICE_ID	0x4434
 #define BRCM_PCIE_4390_DEVICE_ID	0x4438
+#define BRCM_PCIE_4383_DEVICE_ID	0x4449
 #define CY_PCIE_54591_DEVICE_ID		0x4417
 
 /* brcmsmac IDs */

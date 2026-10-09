@@ -8,6 +8,7 @@
 /dts-v1/;
 
 #include "zumapro-pixel-common.dtsi"
+#include "zumapro-tegu-nixos.dtsi"
 
 / {
 	model = "Pixel 9a";

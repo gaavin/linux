@@ -77,6 +77,7 @@ BRCMF_FW_CLM_DEF(4387C2, "brcmfmac4387c2-pcie");
 BRCMF_FW_CLM_DEF(4388B0, "brcmfmac4388b0-pcie");
 BRCMF_FW_CLM_DEF(4388C0, "brcmfmac4388c0-pcie");
 BRCMF_FW_CLM_DEF(4390B1, "brcmfmac4390b1-pcie");
+BRCMF_FW_CLM_DEF(4383A3, "brcmfmac4383a3-pcie");
 BRCMF_FW_CLM_DEF(54591, "brcmfmac54591-pcie");
 
 /* firmware config files */
@@ -121,6 +122,7 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0x0000000F, 4388B0),
 	BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0xFFFFFFF0, 4388C0), /* revision ID 4 */
 	BRCMF_FW_ENTRY(BRCM_CC_4390_CHIP_ID, 0xFFFFFFE0, 4390B1), /* revision ID 5 */
+	BRCMF_FW_ENTRY(BRCM_CC_4383_CHIP_ID, 0xFFFFFFFF, 4383A3), /* tegu, rev 2 */
 };
 
 #define BRCMF_PCIE_FW_UP_TIMEOUT		5000 /* msec */
@@ -1081,6 +1083,19 @@ static void brcmf_pcie_poll_mb_data(struct brcmf_pciedev_info *devinfo)
 	u32 dtoh_mb_data;
 
 	shared = &devinfo->shared;
+
+	/* The firmware says which mailbox mechanism it drives. When it
+	 * exchanges mailbox words over the control ring (USE_MAILBOX clear),
+	 * the TCM D2H mailbox word is not maintained: the BCM4383 leaves
+	 * 0xffffffff in it, which brcmf_pcie_handle_mb_data() decodes as
+	 * DS_ENTER_REQ|DS_EXIT|D3_ACK|FW_HALT at once, and the driver tears
+	 * down a dongle that never halted. The ctl-ring path
+	 * (brcmf_pcie_d2h_mb_rx) is the real one in that mode; the H2D send
+	 * side already takes the same branch.
+	 */
+	if (shared->mb_via_ctl)
+		return;
+
 	addr = shared->dtoh_mb_data_addr;
 	dtoh_mb_data = brcmf_pcie_read_tcm32(devinfo, addr);
 
@@ -1146,6 +1161,19 @@ static void brcmf_pcie_bus_console_read(struct brcmf_pciedev_info *devinfo,
 		return;
 	addr = console->base_addr + BRCMF_CONSOLE_WRITEIDX_OFFSET;
 	newidx = brcmf_pcie_read_tcm32(devinfo, addr);
+	/* A dongle that has halted stops maintaining its console write index,
+	 * and that word then reads back as all-ones. The loop below only ends
+	 * when read_idx reaches newidx, and read_idx wraps at bufsize, so an
+	 * out-of-range newidx makes it re-read and re-print the whole buffer
+	 * forever. Measured on tegu after the BCM4383 traps: the console then
+	 * runs at the full line rate (~12 KB/s at 115200) and never stops,
+	 * which drowns the serial login prompt -- and once the dongle has
+	 * trapped, that console is the only way to reach the phone. A write
+	 * index that is merely stale is still in range, where the loop is
+	 * bounded by a single wrap, so only the impossible value is refused.
+	 */
+	if (newidx >= console->bufsize)
+		return;
 	while (newidx != console->read_idx) {
 		addr = console->buf_addr + console->read_idx;
 		ch = brcmf_pcie_read_tcm8(devinfo, addr);
@@ -2142,6 +2170,22 @@ static int brcmf_pcie_host_cap2_or;
 module_param_named(host_cap2_or, brcmf_pcie_host_cap2_or, int, 0644);
 MODULE_PARM_DESC(host_cap2_or, "Extra bits OR'd into host_cap2");
 
+/* Test knobs for the device->host DMA path, which is where tegu's BCM4383
+ * dongle traps (AXI timeout the moment msgbuf starts using host memory).
+ * Both are read at probe time and the driver is built in, so they can be set
+ * through /sys/module/brcmfmac/parameters/ and then exercised by re-binding
+ * the PCI device -- no rebuild and no flash per attempt.
+ */
+static int brcmf_pcie_dma_mask_bits = 64;
+module_param_named(dma_mask_bits, brcmf_pcie_dma_mask_bits, int, 0644);
+MODULE_PARM_DESC(dma_mask_bits,
+		 "DMA address width to request; 32 keeps coherent buffers below 4G");
+
+static int brcmf_pcie_force_tcm_idx;
+module_param_named(force_tcm_idx, brcmf_pcie_force_tcm_idx, int, 0644);
+MODULE_PARM_DESC(force_tcm_idx,
+		 "Ignore the DMA-index flag and keep ring indices in dongle RAM");
+
 static int
 brcmf_pcie_init_share_ram_info(struct brcmf_pciedev_info *devinfo,
 			       u32 sharedram_addr)
@@ -2169,7 +2213,8 @@ brcmf_pcie_init_share_ram_info(struct brcmf_pciedev_info *devinfo,
 	}
 
 	/* check firmware support dma indicies */
-	if (shared->flags & BRCMF_PCIE_SHARED_DMA_INDEX) {
+	if (!brcmf_pcie_force_tcm_idx &&
+	    (shared->flags & BRCMF_PCIE_SHARED_DMA_INDEX)) {
 		if (shared->flags & BRCMF_PCIE_SHARED_DMA_2B_IDX)
 			devinfo->dma_idx_sz = sizeof(u16);
 		else
@@ -3809,7 +3854,16 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	 * of 32 bits applies, and on a platform whose memory all lives above 4G
 	 * every coherent allocation fails.
 	 */
-	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	dev_info(&pdev->dev, "DBG dma_mask_bits=%d force_tcm_idx=%d\n",
+		 brcmf_pcie_dma_mask_bits, brcmf_pcie_force_tcm_idx);
+	if (brcmf_pcie_dma_mask_bits != 64 &&
+	    (brcmf_pcie_dma_mask_bits < 32 || brcmf_pcie_dma_mask_bits > 64)) {
+		pci_err(pdev, "invalid dma_mask_bits %d\n",
+			brcmf_pcie_dma_mask_bits);
+		return -EINVAL;
+	}
+	ret = dma_set_mask_and_coherent(&pdev->dev,
+			DMA_BIT_MASK(brcmf_pcie_dma_mask_bits));
 	if (ret)
 		ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (ret) {
@@ -4149,6 +4203,7 @@ static const struct pci_device_id brcmf_pcie_devid_table[] = {
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4387_DEVICE_ID, WCC_SEED),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4388_DEVICE_ID, WCC_SEED),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4390_DEVICE_ID, WCC_SEED),
+	BRCMF_PCIE_DEVICE(BRCM_PCIE_4383_DEVICE_ID, WCC_SEED),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_43752_DEVICE_ID, WCC_SEED),
 	BRCMF_PCIE_DEVICE(CY_PCIE_54591_DEVICE_ID, CYW),
 	{ /* end: all zeroes */ }

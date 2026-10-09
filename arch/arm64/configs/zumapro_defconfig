@@ -94,7 +94,7 @@ CONFIG_CPU_FREQ=y
 CONFIG_CPU_FREQ_STAT=y
 CONFIG_CPU_FREQ_GOV_POWERSAVE=y
 CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
-CONFIG_CPUFREQ_DT=m
+CONFIG_CPUFREQ_DT=y
 CONFIG_CPUFREQ_DT_PLATDEV=y
 CONFIG_VIRTUALIZATION=y
 CONFIG_KVM=y
@@ -608,3 +608,62 @@ CONFIG_GOOGLE_AOC_USF=m
 CONFIG_INPUT_AOC_GESTURE_WAKE=m
 CONFIG_TOUCHSCREEN_TBN=m
 CONFIG_AOC_USF_IIO=m
+
+#
+# Pixel 9a (tegu) NixOS port.
+#
+# Board options that belong with the hardware they describe, so this defconfig
+# is enough to build a working tegu kernel on its own. They used to be
+# asserted from outside the tree by the Nix expression that builds it, which
+# meant the kernel could not be built correctly from its own defconfig.
+#
+# Deliberately NOT here: options nixpkgs' common-config.nix also sets. That
+# fragment is layered over this defconfig by the nixpkgs NixOS build, so a
+# value set here would be silently overridden -- STRICT_DEVMEM and LOGO are
+# the two that bite, and they stay forced on the Nix side.
+#
+
+# The boot framebuffer the Pixel bootloader leaves scanning out on DECON0,
+# handed to simpledrm by drivers/video/zumapro-bootfb.c. Built in because the
+# early_param has to run before memblock init, which a module cannot do.
+# Does nothing without "zumapro_bootfb" on the command line.
+CONFIG_DRM=y
+CONFIG_DRM_SIMPLEDRM=y
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_FB_CORE=y
+CONFIG_VT=y
+CONFIG_VT_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
+CONFIG_FONTS=y
+CONFIG_FONT_8x16=y
+CONFIG_FONT_TER16x32=y
+
+# Debug UART (samsung_tty, google,gs101-uart binding + earlycon).
+CONFIG_SERIAL_SAMSUNG=y
+CONFIG_SERIAL_SAMSUNG_CONSOLE=y
+CONFIG_SERIAL_EARLYCON=y
+
+# Bring-up instrument: most of this SoC still has no driver, so /dev/mem from
+# userspace is how a block gets inspected. STRICT_DEVMEM would refuse those
+# reads and IO_STRICT_DEVMEM also refuses any range a driver has claimed.
+CONFIG_DEVMEM=y
+
+# BL2 arms a 60 s cluster watchdog on every boot; nothing petting it is a
+# reset on a timer, so Linux adopts the running watchdog rather than arming a
+# fresh one.
+CONFIG_WATCHDOG=y
+CONFIG_S3C2410_WATCHDOG=y
+CONFIG_WATCHDOG_SYSFS=y
+CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED=y
+
+# The touchscreen: the USI block its SPI controller sits behind, and the
+# controller itself, which holds a native chip select across a whole message.
+CONFIG_SPI=y
+CONFIG_SPI_MASTER=y
+CONFIG_SPI_S3C64XX=y
+CONFIG_EXYNOS_USI=y
+CONFIG_INPUT=y
+CONFIG_INPUT_EVDEV=y
+CONFIG_INPUT_TOUCHSCREEN=y
+CONFIG_TOUCHSCREEN_SYNA_TCM=y

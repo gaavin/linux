@@ -12,6 +12,12 @@
 #include <linux/fb.h>
 #include <linux/types.h>
 
+/*
+ * The "b8g8r8x8" entry below is Pixel 9a (tegu) specific: the bootloader
+ * leaves a BGRA8888 buffer scanning out. Alpha is meaningless for a
+ * scanout-only layer, so BGRX8888 is the honest name for it and DRM can
+ * already convert into it. See drivers/video/zumapro-bootfb.c.
+ */
 /* format array, use it to initialize a "struct simplefb_format" array */
 #define SIMPLEFB_FORMATS \
 { \
@@ -24,6 +30,7 @@
 	{ "a8r8g8b8", 32, {16, 8}, {8, 8}, {0, 8}, {24, 8}, DRM_FORMAT_ARGB8888 }, \
 	{ "x8b8g8r8", 32, {0, 8}, {8, 8}, {16, 8}, {0, 0}, DRM_FORMAT_XBGR8888 }, \
 	{ "a8b8g8r8", 32, {0, 8}, {8, 8}, {16, 8}, {24, 8}, DRM_FORMAT_ABGR8888 }, \
+	{ "b8g8r8x8", 32, {8, 8}, {16, 8}, {24, 8}, {0, 0}, DRM_FORMAT_BGRX8888 }, \
 	{ "x2r10g10b10", 32, {20, 10}, {10, 10}, {0, 10}, {0, 0}, DRM_FORMAT_XRGB2101010 }, \
 	{ "a2r10g10b10", 32, {20, 10}, {10, 10}, {0, 10}, {30, 2}, DRM_FORMAT_ARGB2101010 }, \
 }
